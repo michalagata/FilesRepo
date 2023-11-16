@@ -1,6 +1,6 @@
 @ECHO OFF
 
-SET InstallLocation=\\10.200.200.245\share\SOFTWARE\!FREE
+SET InstallLocation=<SHARE>
 
 IF "%~1" == "" (SET DestJbDir="C:\APPS\") ELSE (SET DestJbDir="%~1")
 
