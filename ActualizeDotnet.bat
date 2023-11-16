@@ -1,6 +1,6 @@
 @ECHO OFF
 
-SET InstallLocation=\\10.200.200.245\share\INSTALL
+SET InstallLocation=<SHARE>
 
 set mydate=%date:~6,4%-%date:~3,2%-%date:~0,2%
 
