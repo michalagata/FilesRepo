@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory = $true)]
-    [string]$DotnetVersion
+    [string]$DotnetMajorVersion
 )
 
 # Known .NET installation locations
@@ -10,12 +10,12 @@ $locations = @(
     "$env:USERPROFILE\.dotnet"
 )
 
-Write-Host "Searching for .NET version $DotnetVersion in known locations..." -ForegroundColor Green
+Write-Host "Searching for all .NET versions matching major version $DotnetMajorVersion in known locations..." -ForegroundColor Green
 
 foreach ($location in $locations) {
     if (Test-Path -Path $location) {
         Write-Host "Checking location: $location" -ForegroundColor Yellow
-        Remove-DotnetVersion -Path $location -Version $DotnetVersion
+        Remove-DotnetVersion -Path $location -MajorVersion $DotnetMajorVersion
     } else {
         Write-Host "Skipping non-existent location: $location" -ForegroundColor Gray
     }
@@ -28,7 +28,7 @@ function Remove-DotnetVersion {
         [Parameter(Mandatory = $true)]
         [string]$Path,
         [Parameter(Mandatory = $true)]
-        [string]$Version
+        [string]$MajorVersion
     )
 
     # Target folder for shared frameworks
@@ -38,9 +38,9 @@ function Remove-DotnetVersion {
         return
     }
 
-    # Recursively search for folders matching the version pattern
+    # Recursively search for folders matching the major version pattern
     Get-ChildItem -Path $sharedPath -Recurse -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        if ($_.Name -like "$Version*") {
+        if ($_.Name -like "$MajorVersion.*") {
             Write-Host "Found matching folder: $($_.FullName)" -ForegroundColor Cyan
             try {
                 Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction Stop
