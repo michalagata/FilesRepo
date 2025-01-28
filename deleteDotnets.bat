@@ -3,15 +3,15 @@ setlocal enabledelayedexpansion
 
 :: Check if the user provided a version parameter
 if "%~1"=="" (
-    echo Usage: %~nx0 [dotnet_version]
-    echo Example: %~nx0 6.0
+    echo Usage: %~nx0 [dotnet_major_version]
+    echo Example: %~nx0 6
     exit /b 1
 )
 
-set "dotnet_version=%~1"
+set "dotnet_major_version=%~1"
 set "locations=C:\Program Files\dotnet C:\Program Files (x86)\dotnet %USERPROFILE%\.dotnet"
 
-echo Searching for .NET version %dotnet_version% in known locations...
+echo Searching for all .NET versions matching major version %dotnet_major_version% in known locations...
 
 for %%L in (%locations%) do (
     if exist "%%L" (
@@ -27,11 +27,11 @@ exit /b 0
 
 :DeleteDotnetVersion
 set "target_folder=%~1"
-:: Search for subfolders matching the specified version
+:: Search for subfolders matching the major version
 for /r "%target_folder%\shared" %%D in (.) do (
     if exist "%%D" (
         echo Checking subfolder: %%D
-        for /d %%V in ("%%D\%dotnet_version%*") do (
+        for /d %%V in ("%%D\%dotnet_major_version%.*") do (
             echo Found matching folder: %%V
             echo Deleting folder %%V...
             rmdir /s /q "%%V" 2>nul
