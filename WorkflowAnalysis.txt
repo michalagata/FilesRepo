@@ -1,0 +1,118 @@
+Analiza i rekomendacja: wdrożenie systemu Workflow on-premise zamiast w chmurze publicznej
+Poniżej przedstawiono szczegółową argumentację wskazującą, dlaczego przeniesienie systemu Workflow (napisanego w .NET 8.0, korzystającego z bazy Microsoft SQL Server oraz integrującego się z licznymi systemami wewnętrznymi on-premise) do chmury publicznej nie jest korzystne w omawianym przypadku. W raporcie skoncentrowano się na aspektach czysto technicznych i organizacyjnych, pomijając zagadnienia związane z compliance czy backupami, a uwypuklając kwestie konieczności przechowywania logów przez długi okres (minimum 10 lat) oraz złożone integracje.
+
+⸻
+
+1. Złożona integracja z lokalnymi systemami i protokołami
+
+System Workflow komunikuje się z wieloma usługami działającymi wyłącznie w sieci wewnętrznej – m.in. z:
+	•	Bazami danych Microsoft SQL Server,
+	•	Serwisami WCF (net.tcp binding),
+	•	Serwisami REST,
+	•	Klasycznymi WebServices,
+	•	Kolejkami RabbitMQ oraz IBM MQ.
+
+Wszystkie te usługi znajdują się w infrastrukturze on-premise. Umieszczenie głównej aplikacji w chmurze wymagałoby:
+	•	Skonfigurowania wielu szyfrowanych tuneli (VPN) lub innych mostów sieciowych,
+	•	Stałego monitorowania i zarządzania ruchem przychodzącym/wychodzącym do chmury,
+	•	Zmian w firewallach i politykach sieciowych po obu stronach.
+
+Każda z tych czynności wprowadza dodatkową warstwę złożoności i zwiększa ryzyko awarii czy ograniczenia wydajności.
+
+⸻
+
+2. Wysokie wymagania wydajnościowe i masowe przetwarzanie danych
+
+System obsługuje ogromne ilości danych, co oznacza intensywną komunikację oraz duże zapotrzebowanie na zasoby:
+	•	Przesyłanie dużych wolumenów do/z chmury generuje dodatkową latencję, która może być nieakceptowalna w przetwarzaniu transakcyjnym lub czasu rzeczywistego.
+	•	Przy tak dużej skali rosną również koszty transferu (ingress/egress), co może być nieekonomiczne w dłuższej perspektywie.
+
+W lokalnym środowisku Kubernetes, dane „krążą” wyłącznie w obrębie sieci LAN/WAN firmy, dzięki czemu jest to szybsze, stabilniejsze i prostsze w zarządzaniu.
+
+⸻
+
+3. Niestandardowe protokoły komunikacyjne (WCF net.tcp)
+
+Choć wiele systemów komunikacji przeniosło się na REST/HTTP(S), w firmach nadal występują serwisy WCF korzystające z protokołu net.tcp. Ten protokół jest:
+	•	Trudniejszy do efektywnego i bezpiecznego udostępnienia poza siecią lokalną,
+	•	Wymaga specyficznej konfiguracji i otwarcia nietypowych portów na zaporach.
+
+W środowisku chmurowym rodzi to dodatkowe wyzwania i potencjalnie ogranicza elastyczność. Na infrastrukturze on-premise można dalej korzystać z net.tcp bez konieczności skomplikowanego tunelowania i utrzymywania dedykowanych bramek WCF.
+
+⸻
+
+4. Utrudniona obsługa bardzo wysokiej przepustowości
+
+W sytuacji, gdy system Workflow działa on-premise, transfery danych między systemami są obsługiwane przez sieć wewnętrzną. Jest to najczęściej:
+	•	Bardziej wydajna i szybsza sieć LAN/WAN,
+	•	Mniej podatna na opóźnienia i wąskie gardła,
+	•	Łatwiejsza w rozbudowie i zapewnieniu QoS (Quality of Service).
+
+Przy przeniesieniu do chmury może okazać się, że nawet odpowiednio skonfigurowane łącza internetowe staną się bottleneckiem, szczególnie w momentach gwałtownych wzrostów obciążenia (np. wsadowe przetwarzanie dużych porcji danych).
+
+⸻
+
+5. Koszty i problemy związane z transferem logów
+
+System Workflow generuje często ogromne ilości logów – zarówno technicznych (diagnostycznych), jak i biznesowych. Dodatkowo, w omawianym przypadku istnieje wymóg przetrzymywania logów przez minimum 10 lat. Oznacza to, że:
+	•	Sam wolumen danych logowych może urosnąć do gigantycznych rozmiarów,
+	•	Przesyłanie każdego zdarzenia do zewnętrznych baz i repozytoriów logów w chmurze generuje koszty transferu i opóźnienia,
+	•	Konieczne jest zapewnienie długotrwałej retencji – w chmurze przekłada się to na koszty magazynowania, czasem trudne do oszacowania w perspektywie dekady,
+	•	Migracja tak dużych archiwalnych zbiorów logów między dostawcą chmurowym a on-premise (gdyby zaszła potrzeba zmiany architektury w przyszłości) jest ryzykowna i logistycznie skomplikowana.
+
+Przechowywanie i przetwarzanie logów w całości wewnątrz infrastruktury lokalnej (opartej na klastrach Kubernetes) jest bardziej przewidywalne kosztowo i organizacyjnie.
+
+⸻
+
+6. Intensywne wykorzystanie lokalnej bazy Microsoft SQL Server
+
+System jest mocno zależny od bazy Microsoft SQL Server uruchomionej on-premise. Oznacza to:
+	•	Wysoką intensywność transakcji i zapytań SQL,
+	•	Niską tolerancję na opóźnienia w komunikacji z bazą,
+	•	Konieczność utrzymania stabilnych i szybkich łączy z serwerem SQL.
+
+W chmurze integracja z lokalną bazą SQL Server oznaczałaby „rozpięcie” środowiska, stwarzając nowe punkty potencjalnych awarii (sieć, VPN, dostępność usług). Każdy błąd sieciowy wpływałby na ciągłość przetwarzania w systemie Workflow.
+
+⸻
+
+7. Złożoność i ryzyko w warstwie DevOps oraz CI/CD
+
+W przypadku wdrożenia na lokalnych klastrach Kubernetes:
+	•	Zespół DevOps może spiąć wszystkie komponenty w jednorodnej infrastrukturze,
+	•	Narzędzia CI/CD (np. Azure DevOps, Jenkins, GitLab CI) działają w ramach sieci wewnętrznej i odwołują się bezpośrednio do zasobów on-premise,
+	•	Obsługa zmian, wdrożeń i monitoringu jest prostsza, ponieważ nie trzeba dostosowywać się do hybrydowego środowiska (część w chmurze, część lokalnie).
+
+W chmurze pojawiają się dodatkowe elementy (np. dedykowane usługi sieciowe czy bramki), które należy skonfigurować i utrzymywać w spójnej współpracy z lokalną infrastrukturą.
+
+⸻
+
+8. Problemy z latencją i stabilnością łączy w przypadku systemów czasu rzeczywistego
+
+System Workflow może wymagać szybkich odpowiedzi w wielu procesach biznesowych. Niezależnie od tego, jak dobre jest łącze do chmury, latencja zawsze będzie wyższa niż w sieci LAN. Dla części krytycznych operacji, nawet kilkadziesiąt milisekund opóźnienia może prowadzić do:
+	•	Przekroczenia ustalonych SLA,
+	•	Nieprawidłowego działania niektórych procesów,
+	•	Trudności w diagnostyce problemów przy rozproszonej architekturze.
+
+⸻
+
+9. Trudności w monitoringu i diagnostyce
+
+Przy tak skomplikowanej integracji (RabbitMQ, IBM MQ, WCF, REST, SQL Server), monitoring i śledzenie przepływu komunikatów jest już samo w sobie wyzwaniem. Jeśli dołożyć do tego chmurę publiczną:
+	•	Narzędzia do monitoringu (np. Prometheus, Grafana, ELK/EFK do logów) muszą być skonfigurowane dla środowiska rozproszonego,
+	•	Trzeba liczyć się z koniecznością tunelowania również ruchu monitoringowego i logowego,
+	•	Każda dodatkowa warstwa komplikacji wydłuża czas detekcji i rozwiązywania problemów.
+
+Z kolei w klastrze Kubernetes on-premise wszystkie elementy są bliżej siebie, co znacząco upraszcza i przyspiesza działania operacyjne.
+
+⸻
+
+10. Trudna przewidywalność kosztów i rozwoju w dłuższej perspektywie
+
+Chociaż chmura publiczna oferuje skalowalność, przy intensywnym i długotrwałym obciążeniu (co widać po specyfice systemu Workflow z masowym przetwarzaniem danych oraz koniecznością długiej retencji logów) koszty mogą gwałtownie rosnąć. Ponadto:
+	•	Trudno precyzyjnie oszacować długoterminowe wydatki na transfer i zasoby (np. bazy danych, storage dla logów),
+	•	Pojawiają się dodatkowe koszty licencji lub usług sieciowych i bezpieczeństwa,
+	•	Ewentualna zmiana dostawcy chmurowego bywa skomplikowana (portability problem).
+
+W przypadku lokalnych klastrów Kubernetes, dysponując istniejącą infrastrukturą i znając jej charakterystykę, firma jest w stanie lepiej panować nad kosztami i harmonogramem rozbudowy zasobów (procesory, pamięć, macierze dyskowe).
+
+⸻
